@@ -1,4 +1,5 @@
 mod video_snapshot;
+mod feishu_notify;
 
 use axum::{
     routing::{get, post},
@@ -16,6 +17,7 @@ use tower_http::services::ServeDir;
 use tower_http::cors::CorsLayer;
 use video_snapshot::VideoSnapshotService;
 use serde_json;
+use crate::feishu_notify::send_feishu_webhook;
 
 // 新增：请求体结构体
 #[derive(Deserialize)]
@@ -49,6 +51,17 @@ async fn take_snapshot(Json(payload): Json<SnapshotRequest>) -> Response {
     match service.capture_frame(&payload.url, timestamp).await {
         Ok(image_data) => {
             tracing::info!("Successfully captured frame, size: {} bytes", image_data.len());
+            // 飞书通知：截图成功
+            let webhook_url = std::env::var("FEISHU_WEBHOOK_URL").unwrap_or_default();
+            let msg = format!(
+                "【截图成功】\nURL: {}\n时间戳: {} 秒\n图片大小: {} 字节",
+                payload.url, timestamp, image_data.len()
+            );
+            let webhook_url_clone = webhook_url.clone();
+            let msg_clone = msg.clone();
+            tokio::spawn(async move {
+                let _ = send_feishu_webhook(&webhook_url_clone, &msg_clone).await;
+            });
             (
                 [("Content-Type", "image/png")],
                 image_data
@@ -56,6 +69,17 @@ async fn take_snapshot(Json(payload): Json<SnapshotRequest>) -> Response {
         }
         Err(e) => {
             tracing::error!("Failed to capture frame: {}", e);
+            // 飞书通知：截图失败
+            let webhook_url = std::env::var("FEISHU_WEBHOOK_URL").unwrap_or_default();
+            let msg = format!(
+                "【截图失败】\nURL: {}\n时间戳: {} 秒\n错误: {}",
+                payload.url, timestamp, e
+            );
+            let webhook_url_clone = webhook_url.clone();
+            let msg_clone = msg.clone();
+            tokio::spawn(async move {
+                let _ = send_feishu_webhook(&webhook_url_clone, &msg_clone).await;
+            });
             // 返回错误图片或错误信息
             let error_img = create_error_image(&format!("Error: {}", e));
             (
@@ -75,6 +99,17 @@ async fn clip_video(Json(payload): Json<ClipRequest>) -> impl IntoResponse {
     match service.clip_video(&payload.url, start, duration).await {
         Ok(filename) => {
             let video_path = format!("clips/{}", filename);
+            // 飞书通知：截视频成功
+            let webhook_url = std::env::var("FEISHU_WEBHOOK_URL").unwrap_or_default();
+            let msg = format!(
+                "【视频截取成功】\nURL: {}\n起始: {} 秒\n时长: {} 秒\n文件: {}",
+                payload.url, start, duration, filename
+            );
+            let webhook_url_clone = webhook_url.clone();
+            let msg_clone = msg.clone();
+            tokio::spawn(async move {
+                let _ = send_feishu_webhook(&webhook_url_clone, &msg_clone).await;
+            });
             if return_url {
                 // 返回地址
                 let video_url = format!("/clips/{}", filename);
@@ -94,6 +129,17 @@ async fn clip_video(Json(payload): Json<ClipRequest>) -> impl IntoResponse {
             }
         }
         Err(e) => {
+            // 飞书通知：截视频失败
+            let webhook_url = std::env::var("FEISHU_WEBHOOK_URL").unwrap_or_default();
+            let msg = format!(
+                "【视频截取失败】\nURL: {}\n起始: {} 秒\n时长: {} 秒\n错误: {}",
+                payload.url, start, duration, e
+            );
+            let webhook_url_clone = webhook_url.clone();
+            let msg_clone = msg.clone();
+            tokio::spawn(async move {
+                let _ = send_feishu_webhook(&webhook_url_clone, &msg_clone).await;
+            });
             let err = serde_json::json!({"error": format!("视频截取失败: {}", e)});
             (StatusCode::INTERNAL_SERVER_ERROR, Json(err)).into_response()
         }
@@ -128,6 +174,7 @@ fn create_error_image(error_msg: &str) -> Vec<u8> {
 
 #[tokio::main]
 async fn main() {
+    dotenv::dotenv().ok();
     std::fs::create_dir_all("clips").ok();
     // 初始化日志
     tracing_subscriber::fmt::init();
