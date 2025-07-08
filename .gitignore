@@ -1,1 +1,33 @@
-/target
+# Rust
+/target/
+**/*.rs.bk
+Cargo.lock
+
+# Node/Vue
+frontend/vue-project/node_modules/
+frontend/vue-project/dist/
+frontend/vue-project/.env*
+
+# Logs
+*.log
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDEs
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# By-products
+*.tmp
+*.bak
+*.old
+
+# Clips/uploads (如需保留请移除)
+/app/clips/
+/app/uploads/
+clips/
+uploads/
