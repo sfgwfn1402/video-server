@@ -28,6 +28,7 @@ async function extractClip() {
     return
   }
   loading.value = true
+  
   try {
     const res = await fetch('/api/clip', {
       method: 'POST',
@@ -61,7 +62,7 @@ async function extractClip() {
 </script>
 
 <template>
-  <div style="max-width: 800px; margin: 40px auto; padding: 24px; border-radius: 12px; box-shadow: 0 2px 8px #eee; background: #fff;">
+  <div>
     <h2 class="title">视频流剪辑工具</h2>
     <p class="desc">
       支持多种视频格式：MP4, AVI, MOV, MKV, FLV, WebM, RTMP, RTSP, HLS, HTTP 流等
@@ -136,83 +137,119 @@ async function extractClip() {
 
 <style scoped>
 .title {
-  color: #222;
-  font-size: 2rem;
-  font-weight: bold;
-  margin-bottom: 8px;
+  color: #2c3e50;
+  font-size: 2.2rem;
+  font-weight: 700;
+  margin-bottom: 12px;
 }
+
 .desc {
-  color: #444;
+  color: #7f8c8d;
   font-size: 1.1rem;
-  margin-bottom: 18px;
+  margin-bottom: 20px;
+  font-weight: 400;
+  line-height: 1.6;
 }
+
 .label {
-  color: #222;
+  color: #34495e;
   font-size: 1rem;
-  font-weight: bold;
-  margin-bottom: 6px;
+  font-weight: 600;
+  margin-bottom: 8px;
   display: block;
 }
+
 .input {
   width: 100%;
-  padding: 10px 12px;
-  font-size: 1.1rem;
-  border-radius: 5px;
-  border: 1.5px solid #bbb;
-  background: #fff;
-  color: #222;
-  margin-bottom: 2px;
-  outline: none;
-  transition: border 0.2s;
-}
-.input:focus {
-  border: 1.5px solid #42b983;
-}
-.example-btn {
-  padding: 7px 16px;
-  background: #f7f7f7;
-  border: 1.5px solid #bbb;
-  border-radius: 4px;
-  cursor: pointer;
+  padding: 14px 16px;
   font-size: 1rem;
-  color: #222;
+  border-radius: 12px;
+  border: 2px solid rgba(52, 152, 219, 0.2);
+  background: rgba(255, 255, 255, 0.9);
+  backdrop-filter: blur(10px);
+  color: #2c3e50;
+  margin-bottom: 4px;
+  outline: none;
+  transition: all 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
   font-weight: 500;
-  transition: background 0.2s, border 0.2s;
 }
+
+.input:focus {
+  border: 2px solid #3498db;
+  background: rgba(255, 255, 255, 1);
+  transform: translateY(-1px);
+  box-shadow: 0 8px 25px rgba(52, 152, 219, 0.15);
+}
+
+.example-btn {
+  padding: 8px 16px;
+  background: rgba(255, 255, 255, 0.8);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(52, 152, 219, 0.3);
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 0.9rem;
+  color: #2c3e50;
+  font-weight: 500;
+  transition: all 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+}
+
 .example-btn:hover {
-  background: #e0f7ef;
-  border: 1.5px solid #42b983;
+  background: #3498db;
+  color: white;
+  transform: translateY(-1px);
+  box-shadow: 0 6px 20px rgba(52, 152, 219, 0.3);
 }
+
 .main-btn {
   width: 100%;
-  padding: 12px;
-  background: #42b983;
+  padding: 16px;
+  background: linear-gradient(135deg, #3498db, #2980b9);
   color: #fff;
   border: none;
-  border-radius: 5px;
-  font-size: 1.2rem;
-  font-weight: bold;
+  border-radius: 12px;
+  font-size: 1.1rem;
+  font-weight: 600;
   cursor: pointer;
   margin-bottom: 16px;
-  transition: background 0.2s;
+  transition: all 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+  box-shadow: 0 6px 20px rgba(52, 152, 219, 0.3);
 }
+
 .main-btn:disabled {
-  background: #b2dfcf;
+  background: linear-gradient(135deg, #bdc3c7, #95a5a6);
   cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
 }
+
+.main-btn:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 30px rgba(52, 152, 219, 0.4);
+  background: linear-gradient(135deg, #2980b9, #3498db);
+}
+
 .error-box {
-  color: #b71c1c;
-  background: #ffeaea;
-  border: 1.5px solid #ffbdbd;
-  border-radius: 4px;
-  padding: 10px;
-  margin-top: 10px;
-  font-size: 1.05rem;
+  background: rgba(231, 76, 60, 0.1);
+  backdrop-filter: blur(10px);
+  color: #e74c3c;
+  padding: 16px;
+  border-radius: 12px;
+  border: 1px solid rgba(231, 76, 60, 0.3);
+  margin-bottom: 16px;
+  font-weight: 500;
 }
+
 .result-title {
-  color: #222;
-  font-size: 1.15rem;
-  font-weight: bold;
-  margin-bottom: 10px;
+  color: #27ae60;
+  font-size: 1.8rem;
+  margin-bottom: 16px;
+  font-weight: 600;
+}
+
+/* 复选框标签样式 */
+label[style*="font-size: 1rem"] {
+  color: #2c3e50 !important;
+  font-weight: 500 !important;
 }
 </style> 
