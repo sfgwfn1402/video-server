@@ -371,7 +371,7 @@ impl VideoSnapshotService {
         }
         
             // 清理clips目录，最多只保留100个文件
-            if let Err(e) = Self::cleanup_clips_dir(100) {
+            if let Err(e) = Self::cleanup_clips_dir(10) {
                 tracing::warn!("Failed to cleanup clips dir: {}", e);
             }
         
