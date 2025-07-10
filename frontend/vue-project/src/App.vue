@@ -486,7 +486,7 @@ body {
   margin-bottom: 16px;
   transition: all 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
   box-shadow: 0 6px 20px rgba(52, 152, 219, 0.3);
-}
+  }
 
 .main-btn:disabled {
   background: linear-gradient(135deg, #bdc3c7, #95a5a6);
@@ -499,7 +499,7 @@ body {
   transform: translateY(-2px);
   box-shadow: 0 8px 30px rgba(52, 152, 219, 0.4);
   background: linear-gradient(135deg, #2980b9, #3498db);
-}
+  }
 
 .error-box {
   background: rgba(231, 76, 60, 0.1);
@@ -539,7 +539,7 @@ div[style*="max-width: 800px"] {
 label[style*="font-size: 1rem"] {
   color: #2c3e50 !important;
   font-weight: 500 !important;
-}
+  }
 
 /* 内联样式标签的通用修复 */
 div[style*="margin-bottom: 16px"] label {

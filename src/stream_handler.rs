@@ -64,23 +64,14 @@ impl StreamHandler for RTSPHandler {
         let mut cmd = Command::new("ffmpeg");
         cmd.args([
             "-rtsp_transport", self.transport.as_str(),
+            "-timeout", &self.timeout.as_micros().to_string(),
+            "-analyzeduration", "5000000",
+            "-probesize", "5000000",
             "-i", url,
             "-ss", &timestamp.to_string(),
             "-vframes", "1",
             "-f", "image2",
             "-y",
-        ]);
-
-        if self.reconnect {
-            cmd.args([
-                "-reconnect", "1",
-                "-reconnect_streamed", "1",
-                "-reconnect_delay_max", "5",
-            ]);
-        }
-
-        cmd.args([
-            "-timeout", &self.timeout.as_micros().to_string(),
             output,
         ]);
 
@@ -89,23 +80,18 @@ impl StreamHandler for RTSPHandler {
 
     fn build_clip_command(&self, url: &str, start: f64, duration: f64, output: &str) -> Command {
         let mut cmd = Command::new("ffmpeg");
-        
-        if self.reconnect {
-            cmd.args([
-                "-reconnect", "1",
-                "-reconnect_streamed", "1",
-                "-reconnect_delay_max", "5",
-            ]);
-        }
-
         cmd.args([
             "-rtsp_transport", self.transport.as_str(),
-            "-i", url,
-            "-ss", &start.to_string(),
-            "-t", &duration.to_string(),
-            "-c:v", "copy", // 使用copy避免重新编码
-            "-y",
             "-timeout", &self.timeout.as_micros().to_string(),
+            "-analyzeduration", "5000000",
+            "-probesize", "5000000",
+            "-ss", &start.to_string(),
+            "-i", url,
+            "-t", &duration.to_string(),
+            "-c:v", "copy", // 视频流复制
+            "-c:a", "aac",  // 音频重新编码为AAC
+            "-b:a", "128k", // 音频比特率
+            "-y",
             output,
         ]);
 
