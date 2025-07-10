@@ -58,22 +58,29 @@ impl VideoSnapshotService {
     fn get_protocol_args(protocol: &StreamProtocol, url: &str) -> Vec<String> {
         match protocol {
             StreamProtocol::RTSP => {
-                // 对于某些摄像头，使用最基本的参数
+                // Docker环境优化的RTSP参数
                 if url.contains("realmonitor") {
                     vec![
                         "-rtsp_transport".to_string(), "tcp".to_string(),
                         "-fflags".to_string(), "nobuffer".to_string(),
+                        "-flags".to_string(), "low_delay".to_string(),
+                        "-strict".to_string(), "experimental".to_string(),
                         "-analyzeduration".to_string(), "1000000".to_string(), // 1秒分析时间
                         "-probesize".to_string(), "1000000".to_string(), // 1MB探测大小
                         "-timeout".to_string(), "10000000".to_string(), // 10秒超时
+                        "-thread_queue_size".to_string(), "512".to_string(),
                     ]
                 } else {
                     vec![
                         "-rtsp_transport".to_string(), "tcp".to_string(),
                         "-timeout".to_string(), "10000000".to_string(),
+                        "-fflags".to_string(), "nobuffer".to_string(),
+                        "-flags".to_string(), "low_delay".to_string(),
+                        "-strict".to_string(), "experimental".to_string(),
                         "-analyzeduration".to_string(), "5000000".to_string(),
                         "-probesize".to_string(), "5000000".to_string(),
                         "-max_delay".to_string(), "500000".to_string(),
+                        "-thread_queue_size".to_string(), "512".to_string(),
                     ]
                 }
             },
@@ -159,14 +166,19 @@ impl VideoSnapshotService {
         let protocol = Self::detect_protocol(url);
         tracing::info!("Detected protocol: {:?}", protocol);
         
-        // 为特定摄像头使用简化的命令
+        // 为特定摄像头使用Docker优化的命令
         let args = if url.contains("realmonitor") {
-            tracing::info!("Using simplified command for realmonitor camera");
+            tracing::info!("Using Docker-optimized command for realmonitor camera");
             vec![
                 "-rtsp_transport".to_string(), "tcp".to_string(),
                 "-timeout".to_string(), "10000000".to_string(), // 10秒超时
+                "-fflags".to_string(), "nobuffer".to_string(), // 禁用缓冲
+                "-flags".to_string(), "low_delay".to_string(), // 低延迟模式
+                "-strict".to_string(), "experimental".to_string(), // 实验性特性
+                "-thread_queue_size".to_string(), "512".to_string(), // 线程队列大小
                 "-i".to_string(), url.to_string(),
                 "-vframes".to_string(), "1".to_string(),
+                "-q:v".to_string(), "2".to_string(), // 高质量截图
                 "-f".to_string(), "image2".to_string(),
                 "-y".to_string(),
                 output_path.to_string(),
@@ -224,7 +236,7 @@ impl VideoSnapshotService {
             tracing::error!("Image data is empty");
             return Err("Generated image file is empty".to_string());
         }
-        
+            
         Ok(image_data)
     }
 
@@ -240,20 +252,25 @@ impl VideoSnapshotService {
         let protocol = Self::detect_protocol(url);
         tracing::info!("Detected protocol: {:?}", protocol);
         
-        // 为特定摄像头使用简化的命令
+        // 为特定摄像头使用Docker优化的命令
         let args = if url.contains("realmonitor") {
-            tracing::info!("Using simplified command for realmonitor camera");
+            tracing::info!("Using Docker-optimized command for realmonitor camera");
             vec![
                 "-rtsp_transport".to_string(), "tcp".to_string(),
                 "-timeout".to_string(), "10000000".to_string(), // 10秒超时
+                "-fflags".to_string(), "nobuffer+genpts".to_string(), // 禁用缓冲+生成PTS
+                "-flags".to_string(), "low_delay".to_string(), // 低延迟模式
+                "-strict".to_string(), "experimental".to_string(), // 实验性特性
+                "-thread_queue_size".to_string(), "512".to_string(), // 线程队列大小
                 "-ss".to_string(), start.to_string(),
                 "-i".to_string(), url.to_string(),
                 "-t".to_string(), duration.to_string(),
-                "-c:v".to_string(), "copy".to_string(), // 视频流复制
+                "-c:v".to_string(), "libx264".to_string(), // 重新编码确保兼容性
+                "-preset".to_string(), "ultrafast".to_string(), // 最快编码
+                "-crf".to_string(), "28".to_string(), // 压缩率
                 "-c:a".to_string(), "aac".to_string(),  // 音频重新编码为AAC
                 "-b:a".to_string(), "128k".to_string(), // 音频比特率
                 "-avoid_negative_ts".to_string(), "make_zero".to_string(), // 避免负时间戳
-                "-fflags".to_string(), "+genpts".to_string(), // 生成PTS
                 "-y".to_string(),
                 output_path.clone(),
             ]
@@ -353,12 +370,12 @@ impl VideoSnapshotService {
             }
         }
         
-        // 清理clips目录，最多只保留100个文件
-        if let Err(e) = Self::cleanup_clips_dir(100) {
-            tracing::warn!("Failed to cleanup clips dir: {}", e);
-        }
+            // 清理clips目录，最多只保留100个文件
+            if let Err(e) = Self::cleanup_clips_dir(100) {
+                tracing::warn!("Failed to cleanup clips dir: {}", e);
+            }
         
-        Ok(filename)
+            Ok(filename)
     }
 
     /// 保证clips目录下最多只保留max_files个文件，删除最旧的
