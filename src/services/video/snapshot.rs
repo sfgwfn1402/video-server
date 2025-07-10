@@ -1,6 +1,8 @@
 use tempfile::NamedTempFile;
 use std::process::Command;
 use uuid::Uuid;
+use std::time::Duration;
+use tokio::time::timeout;
 
 #[derive(Clone)]
 pub struct VideoSnapshotService;
@@ -63,6 +65,7 @@ impl VideoSnapshotService {
                         "-fflags".to_string(), "nobuffer".to_string(),
                         "-analyzeduration".to_string(), "1000000".to_string(), // 1秒分析时间
                         "-probesize".to_string(), "1000000".to_string(), // 1MB探测大小
+                        "-timeout".to_string(), "10000000".to_string(), // 10秒超时
                     ]
                 } else {
                     vec![
@@ -98,19 +101,70 @@ impl VideoSnapshotService {
         }
     }
 
+    /// 异步执行ffmpeg命令，带超时控制
+    async fn execute_ffmpeg_with_timeout(args: Vec<String>) -> Result<std::process::Output, String> {
+        let mut cmd = Command::new("ffmpeg");
+        cmd.args(&args);
+        
+        tracing::info!("Executing ffmpeg command: {:?}", cmd);
+        
+        // 使用tokio的spawn_blocking在后台线程执行阻塞操作
+        let cmd_future = tokio::task::spawn_blocking(move || {
+            cmd.output()
+        });
+        
+        // 设置30秒超时
+        match timeout(Duration::from_secs(30), cmd_future).await {
+            Ok(task_result) => {
+                match task_result {
+                    Ok(cmd_result) => {
+                        match cmd_result {
+                            Ok(output) => {
+                                tracing::info!("FFmpeg command completed");
+                                Ok(output)
+                            },
+                            Err(e) => {
+                                tracing::error!("FFmpeg execution error: {}", e);
+                                Err(format!("Failed to execute ffmpeg: {}", e))
+                            }
+                        }
+                    },
+                    Err(e) => {
+                        tracing::error!("Task join error: {}", e);
+                        Err(format!("Task execution failed: {}", e))
+                    }
+                }
+            },
+            Err(_) => {
+                tracing::error!("FFmpeg command timeout after 30 seconds");
+                Err("FFmpeg command timeout after 30 seconds".to_string())
+            }
+        }
+    }
+
     /// 截取视频流指定时间的图片，返回 PNG 二进制
     pub async fn capture_frame(&self, url: &str, timestamp: f64) -> Result<Vec<u8>, String> {
+        tracing::info!("Starting capture_frame for URL: {}, timestamp: {}", url, timestamp);
+        
         let temp_file = NamedTempFile::new()
-            .map_err(|e| format!("Failed to create temp file: {}", e))?;
+            .map_err(|e| {
+                tracing::error!("Failed to create temp file: {}", e);
+                format!("Failed to create temp file: {}", e)
+            })?;
         let output_path = temp_file.path().to_str()
             .ok_or("Invalid temp file path")?;
         
+        tracing::info!("Created temporary file: {}", output_path);
+        
         let protocol = Self::detect_protocol(url);
+        tracing::info!("Detected protocol: {:?}", protocol);
         
         // 为特定摄像头使用简化的命令
-        let mut args = if url.contains("realmonitor") {
+        let args = if url.contains("realmonitor") {
+            tracing::info!("Using simplified command for realmonitor camera");
             vec![
                 "-rtsp_transport".to_string(), "tcp".to_string(),
+                "-timeout".to_string(), "10000000".to_string(), // 10秒超时
                 "-i".to_string(), url.to_string(),
                 "-vframes".to_string(), "1".to_string(),
                 "-f".to_string(), "image2".to_string(),
@@ -140,37 +194,58 @@ impl VideoSnapshotService {
             args
         };
 
-        let mut cmd = Command::new("ffmpeg");
-        cmd.args(&args);
-        
-        tracing::info!("Detected protocol: {:?}", protocol);
-        tracing::info!("Executing ffmpeg command: {:?}", cmd);
-        
-        let output = cmd.output()
-            .map_err(|e| format!("Failed to execute ffmpeg: {}", e))?;
+        let output = Self::execute_ffmpeg_with_timeout(args).await?;
             
         if !output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr);
+            let stdout = String::from_utf8_lossy(&output.stdout);
+            tracing::error!("FFmpeg failed - stderr: {}", stderr);
+            tracing::error!("FFmpeg failed - stdout: {}", stdout);
             return Err(format!("FFmpeg failed: {}", stderr));
         }
         
+        tracing::info!("FFmpeg execution successful, reading output file");
+        
+        // 检查文件是否存在
+        if !std::path::Path::new(output_path).exists() {
+            tracing::error!("Output file does not exist: {}", output_path);
+            return Err("Output file was not created".to_string());
+        }
+        
         let image_data = std::fs::read(output_path)
-            .map_err(|e| format!("Failed to read output file: {}", e))?;
+            .map_err(|e| {
+                tracing::error!("Failed to read output file {}: {}", output_path, e);
+                format!("Failed to read output file: {}", e)
+            })?;
             
+        tracing::info!("Successfully read image data, size: {} bytes", image_data.len());
+        
+        if image_data.is_empty() {
+            tracing::error!("Image data is empty");
+            return Err("Generated image file is empty".to_string());
+        }
+        
         Ok(image_data)
     }
 
     /// 截取视频流一段，保存为本地文件，返回文件名
     pub async fn clip_video(&self, url: &str, start: f64, duration: f64) -> Result<String, String> {
+        tracing::info!("Starting clip_video for URL: {}, start: {}, duration: {}", url, start, duration);
+        
         let filename = format!("{}.mp4", Uuid::new_v4());
         let output_path = format!("clips/{}", filename);
         
+        tracing::info!("Output file will be: {}", output_path);
+        
         let protocol = Self::detect_protocol(url);
+        tracing::info!("Detected protocol: {:?}", protocol);
         
         // 为特定摄像头使用简化的命令
-        let mut args = if url.contains("realmonitor") {
+        let args = if url.contains("realmonitor") {
+            tracing::info!("Using simplified command for realmonitor camera");
             vec![
                 "-rtsp_transport".to_string(), "tcp".to_string(),
+                "-timeout".to_string(), "10000000".to_string(), // 10秒超时
                 "-ss".to_string(), start.to_string(),
                 "-i".to_string(), url.to_string(),
                 "-t".to_string(), duration.to_string(),
@@ -242,24 +317,48 @@ impl VideoSnapshotService {
             args
         };
 
-        let mut cmd = Command::new("ffmpeg");
-        cmd.args(&args);
-        
-        tracing::info!("Detected protocol: {:?}", protocol);
-        tracing::info!("Executing ffmpeg command for clip: {:?}", cmd);
-        
-        let status = cmd.status()
-            .map_err(|e| format!("Failed to execute ffmpeg: {}", e))?;
+        // 使用带超时的异步执行，但只获取状态
+        let output = Self::execute_ffmpeg_with_timeout(args).await?;
             
-        if status.success() {
-            // 清理clips目录，最多只保留100个文件
-            if let Err(e) = Self::cleanup_clips_dir(100) {
-                tracing::warn!("Failed to cleanup clips dir: {}", e);
-            }
-            Ok(filename)
-        } else {
-            Err("FFmpeg clip failed".to_string())
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            let stdout = String::from_utf8_lossy(&output.stdout);
+            tracing::error!("FFmpeg clip failed - stderr: {}", stderr);
+            tracing::error!("FFmpeg clip failed - stdout: {}", stdout);
+            return Err(format!("FFmpeg clip failed: {}", stderr));
         }
+        
+        tracing::info!("FFmpeg clip execution successful");
+        
+        // 检查文件是否存在
+        if !std::path::Path::new(&output_path).exists() {
+            tracing::error!("Output clip file does not exist: {}", output_path);
+            return Err("Output clip file was not created".to_string());
+        }
+        
+        // 检查文件大小
+        match std::fs::metadata(&output_path) {
+            Ok(metadata) => {
+                let file_size = metadata.len();
+                tracing::info!("Successfully created clip file: {}, size: {} bytes", filename, file_size);
+                
+                if file_size == 0 {
+                    tracing::error!("Generated clip file is empty");
+                    return Err("Generated clip file is empty".to_string());
+                }
+            },
+            Err(e) => {
+                tracing::error!("Failed to get clip file metadata: {}", e);
+                return Err(format!("Failed to get clip file metadata: {}", e));
+            }
+        }
+        
+        // 清理clips目录，最多只保留100个文件
+        if let Err(e) = Self::cleanup_clips_dir(100) {
+            tracing::warn!("Failed to cleanup clips dir: {}", e);
+        }
+        
+        Ok(filename)
     }
 
     /// 保证clips目录下最多只保留max_files个文件，删除最旧的
